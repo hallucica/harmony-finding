@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>“ハモり”探しゲーム</title>
+	<style>
+		@import url('https://fonts.googleapis.com/css2?family=Source+Code+Pro:wght@300&display=swap');
+
+		body {
+			width: 360px;
+			margin: auto;
+			font-family: font-family: 'Source Code Pro', monospace;
+			background-color: #efefef;
+		}
+		.buttonContainer {
+			padding: 12pt 4pt;
+			width: 85%;
+			height: 240px;
+
+			display: flex;
+			flex-direction: row;
+			flex-wrap: wrap;
+			justify-content: space-around;
+		}
+		.ctrlButton {
+			width: 30%;
+			margin: 10%;
+			padding: 12pt 4pt;
+			font: bold 0.8rem "Source Code Pro", sans-serif;
+			color: #666;
+
+			border-radius: 32px;
+
+			cursor: pointer;
+			background-color: #efefef;
+			border: none;
+			box-shadow: 2px 2px 5px rgb(0, 0, 0, 44%), -5px -5px 8px #fff, inset -1px -1px 2px rgb(0, 0, 0, 20%);
+		}
+		.ctrlButton:active {
+			translate: 2.5px 2.5px;
+			box-shadow: inset 2px 2px 2px rgb(0, 0, 0, 44%), inset -2px -2px 3px #fff;
+		}
+		.ctrlButton:disabled {
+			background-color: #cccccc;
+			color: #888;
+			box-shadow: inset 2px 2px 4px rgb(0, 0, 0, 48%), -1px -1px 2px rgb(0, 0, 0, 32%), 1.5px 1.5px 2px #fff;
+			cursor: not-allowed;
+		}
+		.indicator {
+			width: 54px;
+			height: 600px;
+		}
+	</style>
+</head>
+
+<body>
+	<div style="height: 600px; display: flex; flex-direction: row; align-items: center;">
+		<div class="buttonContainer">
+			<button class="ctrlButton" name="play" id="play" onclick="play()">Play</button>
+			<button class="ctrlButton" name="stop" id="stop" onclick="stop()">Stop</button>
+			<button class="ctrlButton" name="hold" id="hold" onclick="hold()">Hold</button>
+		</div>
+		<canvas class="indicator" name="indicator" id="indicator"></canvas>
+	</div>
+
+	<script src="wavetable.js"></script>
+	<script>
+		//////////////////////////////////////////////////////////
+		/// ランダムなEDOをセットして周期的に異なるピッチの音を鳴らすプログラム ///
+		//////////////////////////////////////////////////////////
+
+		/// DOMの参照を格納 ///
+		const playButton = document.getElementById("play");
+		const holdButton = document.getElementById("hold");
+		const stopButton = document.getElementById("stop");
+
+		/// 初期状態ではPlayボタン以外を無効化しておく
+		holdButton.disabled = true;
+		stopButton.disabled = true;
+
+		/// オーディオ処理グラフの準備 ///
+		const audioCtx = new AudioContext();						// コンテキストの生成
+		var oscillatorNode;											// オシレータノードの格納用変数
+		var gainNode;												// ゲインノードの格納用変数
+		var status = "stop";										// 音を再生中かどうか
+
+
+		/// N-EDOの生成の準備 ///
+		var N = 12;													// オクターヴの分割数
+		const C4 = 264;												// A4 = 440Hz の時の C4 の振動数
+		var fourth = 0;
+
+		window.onload =  function () {								// ページ読み込み時に音律を決定
+			N = Math.floor( Math.random() * (41 - 12 + 1) + 12 );	// 12から41までのランダムな整数
+			fourth = Math.floor(N * (2 - Math.log2(3)));		// 完全四度
+			updateIndicator();
+		}
+
+		/// オシレータの起動 ///
+		function play() {
+			// 再生ボタンを無効化し，ホールドボタンと停止ボタンを有効化
+			playButton.disabled = true;
+			holdButton.disabled = false;
+			stopButton.disabled = false;
+
+			oscillatorNode = audioCtx.createOscillator();			// オシレータの生成
+			oscillatorNode.type = "triangle";						// 波形を疑似三角波に
+			oscillatorNode.frequency.value = C4;					// 初期ピッチを C4 に設定
+
+			gainNode = audioCtx.createGain();						// ゲインノードの生成
+			gainNode.gain.value = 0.2;								// 音量の初期値を設定
+
+			oscillatorNode	.connect(gainNode)						// オシレータノードをゲインノードへ接続
+			.connect(audioCtx.destination);							// ゲインノードを出力へ接続
+
+			if (audioCtx.state !== "running") {
+				status = "play";
+				audioCtx.resume();
+				oscillatorNode.start(audioCtx.currentTime);
+				stepFifths();
+			}
+		}
+
+		/// オシレータの停止 ///
+		function stop() {
+			/// 停止中は再生ボタンを有効化し，ホールドボタンと停止ボタンを無効化
+			playButton.disabled = false;
+			holdButton.disabled = true;
+			stopButton.disabled = true;
+
+			if (audioCtx.state === "running") {
+				oscillatorNode.stop();								// オシレータの停止
+				audioCtx.suspend();									// オーディオコンテキストの時間進行を中断
+				clearTimeout(timeoutId);							// ピッチ変更処理のルーティンを停止
+			}
+			count = 0;												// ピッチ変更のステップカウントを初期値に戻す
+			if (holded) {
+				holded = false;
+				holdButton.textContent = "Hold";
+			}
+
+			// インジケータの更新
+			status = "stop";
+			updateIndicator();
+		}
+
+
+		/// 1秒毎に完全5度ずつずらしていく処理 ///
+		var timeoutId;
+		var step = 0;
+		var octShift = 0;
+
+		function stepFifths() {
+			let promise = new Promise( (resolve, reject) => { 
+				step = (step + Math.floor(Math.random() * (fourth -1) +1)) % N;	// 1ステップから完全四度までのランダムなステップを加算
+				octShift = Math.floor(Math.random() * 2  - 1);		// random -1 or 0
+				oscillatorNode.frequency.value
+					= C4 * Math.pow(2, step / N) * Math.pow(2, octShift); 
+				// console.log(`${step % N}\\${N}, ${octShift}`);
+				updateIndicator();
+				resolve();
+			});
+			// 5秒に3回のペースで自身を再呼び出し
+			promise.then( () => {
+				timeoutId = setTimeout( () => {
+					stepFifths();
+				}, 1667);
+			});
+		}
+
+		/// ピッチのホールドとリリース ///
+		var holded = false;
+
+		function hold() {
+			if (!holded) {
+				clearTimeout(timeoutId);
+				holded = true;
+				holdButton.textContent = "Release";
+			} else {
+				stepFifths();
+				holded = false;
+				holdButton.textContent = "Hold";
+			}
+		}
+
+
+		///////////////////////////////////////
+		/// 音の高さを指示するインジケータのプログラム ///
+		///////////////////////////////////////
+
+		/// DOMの参照を格納
+		const canvas = document.getElementById("indicator");
+		canvas.width = canvas.clientWidth;
+		canvas.height = canvas.clientHeight;
+
+		const canvasCtx = canvas.getContext("2d");
+		const indicatorHeight = canvas.height * 0.94;
+
+		function updateIndicator () {
+			canvasCtx.clearRect(0, 0, canvas.width, canvas.height);
+			for (let i = 0; i <= 2 * N; i++) {
+				let pos_y = canvas.height * 0.03 + (2 * N - i) * indicatorHeight / (2 * N);
+				let r = 3;
+				canvasCtx.strokeStyle = "rgb(190, 190, 190)";
+				if (i === step + (1 + octShift) * N && status === "play") { 
+					r = 8; 
+					canvasCtx.strokeStyle = "rgb(150, 150, 150)";
+				}
+
+				canvasCtx.lineWidth = 3;
+				canvasCtx.beginPath();
+				canvasCtx.moveTo(canvas.width * 0.5 - r * 0.5, pos_y);
+				canvasCtx.lineTo(canvas.width * 0.5 + r * 0.5, pos_y);
+				canvasCtx.stroke();
+			}
+		}
+
+		
+		function deg2rad (d) { return d * Math.PI / 180; }
+		function rad2deg (r) { return r * 180 / Math.PI; }
+	</script>
+</body>
+</html>
