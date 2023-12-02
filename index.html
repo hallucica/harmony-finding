@@ -89,7 +89,7 @@
 
 		/// N-EDOの生成の準備 ///
 		var N = 12;													// オクターヴの分割数
-		const C4 = 264;												// A4 = 440Hz の時の C4 の振動数
+		const A4 = 440;												// A4 = 440Hz
 		var fourth = 0;
 
 		window.onload =  function () {								// ページ読み込み時に音律を決定
@@ -109,7 +109,7 @@
 			// oscillatorNode.type = "triangle";						// 波形を疑似三角波に
 			oscillatorNode.setPeriodicWave(waveWuri);
 
-			oscillatorNode.frequency.value = C4;					// 初期ピッチを C4 に設定
+			oscillatorNode.frequency.value = A4;					// 初期ピッチを A4 に設定
 
 			gainNode = audioCtx.createGain();						// ゲインノードの生成
 			gainNode.gain.value = 0.2;								// 音量の初期値を設定
@@ -159,7 +159,7 @@
 				step = (step + Math.floor(Math.random() * (fourth -1) +1)) % N;	// 1ステップから完全四度までのランダムなステップを加算
 				octShift = Math.floor(Math.random() * 2  - 1);		// random -1 or 0
 				oscillatorNode.frequency.value
-					= C4 * Math.pow(2, step / N) * Math.pow(2, octShift); 
+					= A4 * Math.pow(2, step / N) * Math.pow(2, octShift); 
 				// console.log(`${step % N}\\${N}, ${octShift}`);
 				updateIndicator();
 				resolve();
