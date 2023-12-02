@@ -65,6 +65,7 @@
 	</div>
 
 	<script src="wavetable.js"></script>
+	<script src="MoSfinder.js"></script>
 	<script>
 		//////////////////////////////////////////////////////////
 		/// ランダムなEDOをセットして周期的に異なるピッチの音を鳴らすプログラム ///
@@ -87,15 +88,58 @@
 		const waveWuri = audioCtx.createPeriodicWave(wavetable.real, wavetable.imag);
 
 
-		/// N-EDOの生成の準備 ///
-		var N = 12;													// オクターヴの分割数
-		const A4 = 220;												// A4 = 440Hz
-		var fourth = 0;
+		const A3 = 264;												// A3 = 220Hz
+		/// スケール生成の準備 ///
+		const N = 53;
+		let P4 = 0;
+		mosTable = [
+			[0,9,18,27,36,45],					// baldy
+			[0,1,9,10,18,19,27,28,36,37,45],
+			[0,10,20,30,40,50],					// semaja
+			[0,7,10,17,20,27,30,37,40,47,50],
+			[0,2,11,13,22,24,33,35,44],			// hemischis
+			[0,12,24,36,48],					// orwell
+			[0,7,12,19,24,31,36,43,48],
+			[0,12,13,25,26,38,39,51,52],		// kleiboh
+			[0,3,14,17,28,31,42],				// hanson
+			[0,3,6,14,17,20,28,31,34,42,45],
+			[0,7,15,22,30,37,45],				// amity
+			[0,11,16,27,32,43,48],				// submajor
+			[0,4,8,12,19,23,27,31,38,42,46],	// hamity
+			[0,4,13,22,26,35,44],				// helmholtz
+			[0,4,8,13,17,22,26,30,35,39,44,48],
+			[0,13,16,19,22,25,38,41,44,47,50]	// tricot
+		]
+		var n = mosTable.length;
+		let scale = [];
 
 		window.onload =  function () {								// ページ読み込み時に音律を決定
-			N = Math.floor( Math.random() * (41 - 12 + 1) + 12 );	// 12から41までのランダムな整数
-			fourth = Math.floor(N * (2 - Math.log2(3)));		// 完全四度
+			/// M2からP4までの音程をジェネレータとしてMoSを生成
+			let temp = new Scale(N, mosTable[Math.floor(Math.random() * n)]);
+			let temp2 = temp.getRotation(Math.floor(Math.random() * temp.size)).stepArray;
+			for (let i = 0; i < temp2.length * 2; i++) {
+				if (i < temp2.length) scale.push(-53 + temp2[i]);
+				else if (i >= temp2.length) scale.push(temp2[i - temp2.length]);
+			}
+			scale.push(53);
+
 			updateIndicator();
+		}
+
+		function isMoS (scale) {
+			// 現在のスケール配列から各音同士の差の配列を生成
+			let intervalArray = [];
+			for (let i = 0; i < scale.length; i++) {
+				if (i + 1 === scale.length) intervalArray.push(N - scale[i]);
+				else intervalArray.push(scale[i + 1] - scale[i]);
+			}
+
+			let intervals = [];
+			intervalArray.forEach( (s) => {
+				if (intervals.length === 0 || !intervals.includes(s)) intervals.push(s);
+			});
+			if (intervals.length == 2) return true;
+			else return false;
 		}
 
 		/// オシレータの起動 ///
@@ -109,10 +153,10 @@
 			// oscillatorNode.type = "triangle";						// 波形を疑似三角波に
 			oscillatorNode.setPeriodicWave(waveWuri);
 
-			oscillatorNode.frequency.value = A4;					// 初期ピッチを A4 に設定
+			oscillatorNode.frequency.value = A3;					// 初期ピッチを A3 に設定
 
 			gainNode = audioCtx.createGain();						// ゲインノードの生成
-			gainNode.gain.value = 0.2;								// 音量の初期値を設定
+			gainNode.gain.value = 0.02;								// 音量の初期値を設定
 
 			oscillatorNode	.connect(gainNode)						// オシレータノードをゲインノードへ接続
 			.connect(audioCtx.destination);							// ゲインノードを出力へ接続
@@ -151,16 +195,13 @@
 
 		/// 1秒毎に完全5度ずつずらしていく処理 ///
 		var timeoutId;
-		var step = 0;
-		var octShift = 0;
+		var stepIndex = 0;
 
 		function stepFifths() {
 			let promise = new Promise( (resolve, reject) => { 
-				step = (step + Math.floor(Math.random() * (fourth -1) +1)) % N;	// 1ステップから完全四度までのランダムなステップを加算
-				octShift = Math.floor(Math.random() * 2  - 1);		// random -1 or 0
+				stepIndex = Math.floor(Math.random() * scale.length);
 				oscillatorNode.frequency.value
-					= A4 * Math.pow(2, step / N) * Math.pow(2, octShift); 
-				// console.log(`${step % N}\\${N}, ${octShift}`);
+					= A3 * Math.pow(2, scale[stepIndex] / N);
 				updateIndicator();
 				resolve();
 			});
@@ -202,16 +243,24 @@
 
 		function updateIndicator () {
 			canvasCtx.clearRect(0, 0, canvas.width, canvas.height);
-			for (let i = 0; i <= 2 * N; i++) {
-				let pos_y = canvas.height * 0.03 + (2 * N - i) * indicatorHeight / (2 * N);
-				let r = 3;
-				canvasCtx.strokeStyle = "rgb(190, 190, 190)";
-				if (i === step + (1 + octShift) * N && status === "play") { 
-					r = 8; 
-					canvasCtx.strokeStyle = "rgb(150, 150, 150)";
+			for (let i = -N; i <= N; i++) {
+				let pos_y = canvas.height * 0.03 + indicatorHeight / 2 - indicatorHeight * i / (2 * N);
+				let r = 0;
+				
+				if (scale.includes(i)) { 
+					if (status === "play" && i === scale[stepIndex]) {
+						canvasCtx.strokeStyle = "rgb(80, 80, 80)";
+						r = 7.2
+					} else {
+						canvasCtx.strokeStyle = "rgb(180, 180, 180)"; 
+						r = 3.6
+					}
+				} else {
+					canvasCtx.strokeStyle = "rgba(220, 220, 220, 0)";
+					r = 1.8;
 				}
 
-				canvasCtx.lineWidth = 3;
+				canvasCtx.lineWidth = 1.8;
 				canvasCtx.beginPath();
 				canvasCtx.moveTo(canvas.width * 0.5 - r * 0.5, pos_y);
 				canvasCtx.lineTo(canvas.width * 0.5 + r * 0.5, pos_y);
