@@ -3,7 +3,7 @@
 <head>
 	<meta charset="utf-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1">
-	<title>“ハモり”探し</title>
+	<title>“ハモり”探しゲーム</title>
 	<style>
 		@import url('https://fonts.googleapis.com/css2?family=Source+Code+Pro:wght@300&display=swap');
 
@@ -84,6 +84,7 @@
 		var oscillatorNode;											// オシレータノードの格納用変数
 		var gainNode;												// ゲインノードの格納用変数
 		var status = "stop";										// 音を再生中かどうか
+		const waveWuri = audioCtx.createPeriodicWave(wavetable.real, wavetable.imag);
 
 
 		/// N-EDOの生成の準備 ///
@@ -105,7 +106,9 @@
 			stopButton.disabled = false;
 
 			oscillatorNode = audioCtx.createOscillator();			// オシレータの生成
-			oscillatorNode.type = "triangle";						// 波形を疑似三角波に
+			// oscillatorNode.type = "triangle";						// 波形を疑似三角波に
+			oscillatorNode.setPeriodicWave(waveWuri);
+
 			oscillatorNode.frequency.value = C4;					// 初期ピッチを C4 に設定
 
 			gainNode = audioCtx.createGain();						// ゲインノードの生成
