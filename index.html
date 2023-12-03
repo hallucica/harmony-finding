@@ -67,11 +67,7 @@
 	<script src="wavetable.js"></script>
 	<script src="MoSfinder.js"></script>
 	<script>
-		//////////////////////////////////////////////////////////
-		/// ランダムなEDOをセットして周期的に異なるピッチの音を鳴らすプログラム ///
-		//////////////////////////////////////////////////////////
-
-		/// DOMの参照を格納 ///
+		/// ボタン要素の参照を格納 ///
 		const playButton = document.getElementById("play");
 		const holdButton = document.getElementById("hold");
 		const stopButton = document.getElementById("stop");
@@ -80,7 +76,7 @@
 		holdButton.disabled = true;
 		stopButton.disabled = true;
 
-		/// オーディオ処理グラフの準備 ///
+		/// Web Audio APIの準備 ///
 		const audioCtx = new AudioContext();						// コンテキストの生成
 		var oscillatorNode;											// オシレータノードの格納用変数
 		var gainNode;												// ゲインノードの格納用変数
@@ -114,7 +110,6 @@
 		let scale = [];
 
 		window.onload =  function () {								// ページ読み込み時に音律を決定
-			/// M2からP4までの音程をジェネレータとしてMoSを生成
 			let temp = new Scale(N, mosTable[Math.floor(Math.random() * n)]);
 			let temp2 = temp.getRotation(Math.floor(Math.random() * temp.size)).stepArray;
 			for (let i = 0; i < temp2.length * 2; i++) {
@@ -126,21 +121,6 @@
 			updateIndicator();
 		}
 
-		function isMoS (scale) {
-			// 現在のスケール配列から各音同士の差の配列を生成
-			let intervalArray = [];
-			for (let i = 0; i < scale.length; i++) {
-				if (i + 1 === scale.length) intervalArray.push(N - scale[i]);
-				else intervalArray.push(scale[i + 1] - scale[i]);
-			}
-
-			let intervals = [];
-			intervalArray.forEach( (s) => {
-				if (intervals.length === 0 || !intervals.includes(s)) intervals.push(s);
-			});
-			if (intervals.length == 2) return true;
-			else return false;
-		}
 
 		/// オシレータの起動 ///
 		function play() {
@@ -149,8 +129,7 @@
 			holdButton.disabled = false;
 			stopButton.disabled = false;
 
-			oscillatorNode = audioCtx.createOscillator();			// オシレータの生成
-			// oscillatorNode.type = "triangle";						// 波形を疑似三角波に
+			oscillatorNode = audioCtx.createOscillator();
 			oscillatorNode.setPeriodicWave(waveWuri);
 
 			oscillatorNode.frequency.value = A3;					// 初期ピッチを A3 に設定
@@ -193,7 +172,7 @@
 		}
 
 
-		/// 1秒毎に完全5度ずつずらしていく処理 ///
+		/// 1秒毎ずらしていく処理 ///
 		var timeoutId;
 		var stepIndex = 0;
 
