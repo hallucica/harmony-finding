@@ -156,7 +156,7 @@
 			oscillatorNode.frequency.value = A3;					// 初期ピッチを A3 に設定
 
 			gainNode = audioCtx.createGain();						// ゲインノードの生成
-			gainNode.gain.value = 0.02;								// 音量の初期値を設定
+			gainNode.gain.value = 0.5;								// 音量の初期値を設定
 
 			oscillatorNode	.connect(gainNode)						// オシレータノードをゲインノードへ接続
 			.connect(audioCtx.destination);							// ゲインノードを出力へ接続
